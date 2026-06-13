@@ -26,12 +26,13 @@ import { Button } from "@nous-research/ui/ui/components/button";
 import { Typography } from "@nous-research/ui/ui/components/typography/index";
 import { HERMES_BASE_PATH, buildWsAuthParam } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { Copy, PanelRight, X } from "lucide-react";
+import { Copy, PanelRight, SendHorizonal, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 
 import { ChatSidebar } from "@/components/ChatSidebar";
+import { SessionHistoryPanel } from "@/components/SessionHistoryPanel";
 import { usePageHeader } from "@/contexts/usePageHeader";
 import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";
@@ -132,6 +133,8 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
       : null,
   );
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
+  const [chatInput, setChatInput] = useState("");
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Raw state for the mobile side-sheet + a derived value that force-
   // closes whenever the chat tab isn't active.  The *derived* value is
@@ -175,8 +178,21 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
   const resumeParam = searchParams.get("resume");
   const channel = useMemo(() => generateChannelId(), [resumeParam]);
 
+  // Restore the last active session when /chat is opened without a resume param.
+  useEffect(() => {
+    if (resumeParam) return;
+    const saved = localStorage.getItem("hermes-last-session");
+    if (!saved) return;
+    const next = new URLSearchParams(searchParams);
+    next.set("resume", saved);
+    setSearchParams(next, { replace: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!resumeParam) return;
+
+    // Persist last active session for auto-resume on next visit.
+    localStorage.setItem("hermes-last-session", resumeParam);
 
     let cancelled = false;
 
@@ -262,6 +278,26 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     );
     return () => setEnd(null);
   }, [isActive, narrow, mobilePanelOpen, modelToolsLabel, setEnd]);
+
+  const handleChatSend = useCallback(() => {
+    const text = chatInput.trim();
+    if (!text) return;
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(text + "\r");
+    setChatInput("");
+    chatInputRef.current?.focus();
+  }, [chatInput]);
+
+  const handleChatKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleChatSend();
+      }
+    },
+    [handleChatSend],
+  );
 
   const handleCopyLast = () => {
     const ws = wsRef.current;
@@ -838,46 +874,90 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col gap-2 lg:flex-row lg:gap-3">
-        <div
-          className={cn(
-            "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg",
-            "p-2 sm:p-3",
-          )}
-          style={{
-            backgroundColor: terminalBg,
-            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
-          }}
-        >
-          <div
-            ref={hostRef}
-            className="hermes-chat-xterm-host min-h-0 min-w-0 flex-1"
-          />
+      {resumeParam && (
+        <SessionHistoryPanel sessionId={resumeParam} />
+      )}
 
-          <Button
-            ghost
-            onClick={handleCopyLast}
-            title="Copy last assistant response as raw markdown"
-            aria-label="Copy last assistant response"
+      <div className="flex min-h-0 flex-1 flex-col gap-2 lg:flex-row lg:gap-3">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
+          <div
             className={cn(
-              "absolute z-10",
-              "normal-case tracking-normal font-normal",
-              "rounded border border-current/30",
-              "bg-black/20 backdrop-blur-sm",
-              "opacity-70 hover:opacity-100 hover:border-current/60",
-              "transition-opacity duration-150",
-              "bottom-2 right-2 px-2 py-1 text-xs sm:bottom-3 sm:right-3 sm:px-2.5 sm:py-1.5",
-              "lg:bottom-4 lg:right-4",
+              "relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg",
+              "p-2 sm:p-3",
             )}
-            style={{ color: TERMINAL_THEME_STATIC.foreground }}
+            style={{
+              backgroundColor: terminalBg,
+              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
+            }}
           >
-            <span className="inline-flex items-center gap-1.5">
-              <Copy className="h-3 w-3 shrink-0" />
-              <span className="hidden min-[400px]:inline tracking-wide">
-                {copyState === "copied" ? "copied" : "copy last response"}
+            <div
+              ref={hostRef}
+              className="hermes-chat-xterm-host min-h-0 min-w-0 flex-1"
+            />
+
+            <Button
+              ghost
+              onClick={handleCopyLast}
+              title="Copy last assistant response as raw markdown"
+              aria-label="Copy last assistant response"
+              className={cn(
+                "absolute z-10",
+                "normal-case tracking-normal font-normal",
+                "rounded border border-current/30",
+                "bg-black/20 backdrop-blur-sm",
+                "opacity-70 hover:opacity-100 hover:border-current/60",
+                "transition-opacity duration-150",
+                "bottom-2 right-2 px-2 py-1 text-xs sm:bottom-3 sm:right-3 sm:px-2.5 sm:py-1.5",
+                "lg:bottom-4 lg:right-4",
+              )}
+              style={{ color: TERMINAL_THEME_STATIC.foreground }}
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <Copy className="h-3 w-3 shrink-0" />
+                <span className="hidden min-[400px]:inline tracking-wide">
+                  {copyState === "copied" ? "copied" : "copy last response"}
+                </span>
               </span>
-            </span>
-          </Button>
+            </Button>
+          </div>
+
+          {/* Chat input field */}
+          <div
+            className={cn(
+              "flex shrink-0 items-end gap-2 rounded-lg border border-current/20 px-3 py-2",
+              "bg-background-base/60 backdrop-blur-sm",
+            )}
+          >
+            <textarea
+              ref={chatInputRef}
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={handleChatKeyDown}
+              rows={1}
+              placeholder="メッセージを入力… (Enter で送信 / Shift+Enter で改行)"
+              className={cn(
+                "min-h-0 flex-1 resize-none bg-transparent text-sm text-text-primary",
+                "placeholder:text-text-tertiary focus:outline-none",
+                "leading-relaxed",
+              )}
+              style={{ maxHeight: "8rem", overflowY: "auto" }}
+              onInput={(e) => {
+                const el = e.currentTarget;
+                el.style.height = "auto";
+                el.style.height = Math.min(el.scrollHeight, 128) + "px";
+              }}
+            />
+            <Button
+              ghost
+              size="icon"
+              onClick={handleChatSend}
+              disabled={!chatInput.trim()}
+              className="h-7 w-7 shrink-0 text-text-secondary hover:text-midground disabled:opacity-30"
+              aria-label="送信"
+            >
+              <SendHorizonal className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {!narrow && (
