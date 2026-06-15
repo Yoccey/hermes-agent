@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { SendHorizonal, Square, Wrench } from "lucide-react";
+import { SendHorizonal, Square, Wrench, X } from "lucide-react";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { cn } from "@/lib/utils";
 import { Markdown } from "@/components/Markdown";
@@ -18,6 +18,7 @@ import { usePageHeader } from "@/contexts/usePageHeader";
 import { useProfileScope } from "@/contexts/useProfileScope";
 import { GatewayClient } from "@/lib/gatewayClient";
 import { PluginSlot } from "@/plugins";
+import { useBelowBreakpoint } from "@nous-research/ui/hooks/use-below-breakpoint";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -79,7 +80,7 @@ function MessageBubble({ msg }: { msg: Message }) {
     <div className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}>
       <div
         className={cn(
-          "max-w-[75%] rounded-2xl px-4 py-3 text-sm",
+          "max-w-[88%] sm:max-w-[75%] rounded-2xl px-4 py-3 text-sm",
           isUser
             ? "bg-primary text-primary-foreground rounded-br-sm"
             : "bg-secondary/50 text-foreground border border-border/50 rounded-bl-sm",
@@ -109,12 +110,13 @@ function MessageBubble({ msg }: { msg: Message }) {
 
 // ─── Main ChatPage ────────────────────────────────────────────────────────────
 
-export default function ChatPage() {
+export default function ChatPage(_props: { isActive?: boolean } = {}) {
   const { profile } = useProfileScope();
   const { setTitle } = usePageHeader();
   const [searchParams] = useSearchParams();
   const resumeSession = searchParams.get("resume");
 
+  const isMobile = useBelowBreakpoint(1024);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -122,6 +124,7 @@ export default function ChatPage() {
   const [streaming, setStreaming] = useState(false);
   const [channelId] = useState(genId);
   const [historyOpen] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const gwRef = useRef<GatewayClient | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -237,12 +240,34 @@ export default function ChatPage() {
   }, [sessionId]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendMessage(); }
+    if (e.key === "Enter" && (isMobile ? !e.shiftKey : (e.ctrlKey || e.metaKey))) {
+      e.preventDefault();
+      sendMessage();
+    }
   };
 
   return (
     <div className="flex h-full overflow-hidden">
-      <ChatSidebar channel={channelId} />
+
+      {/* サイドバー：デスクトップは常時表示、モバイルはオーバーレイ */}
+      <div className={cn(
+        "hidden lg:flex lg:h-full lg:w-80 lg:shrink-0",
+      )}>
+        <ChatSidebar channel={channelId} />
+      </div>
+
+      {/* モバイルサイドバー：オーバーレイ */}
+      {mobileSidebarOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex flex-col bg-background/95 backdrop-blur-sm p-4 gap-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-muted-foreground">モデル・ツール</span>
+            <Button size="icon" ghost className="h-8 w-8" onClick={() => setMobileSidebarOpen(false)}>
+              <X size={16} />
+            </Button>
+          </div>
+          <ChatSidebar channel={channelId} />
+        </div>
+      )}
 
       <div className="flex flex-col flex-1 min-w-0 h-full">
         {!connected && (
@@ -252,7 +277,7 @@ export default function ChatPage() {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground gap-3 pb-20">
               <div className="text-4xl">⚡</div>
@@ -266,14 +291,31 @@ export default function ChatPage() {
           <div ref={bottomRef} />
         </div>
 
-        <div className="border-t border-border bg-background px-4 py-3">
+        <div className="border-t border-border bg-background px-3 sm:px-4 py-3 safe-area-pb">
           <div className="flex items-end gap-2 max-w-4xl mx-auto">
+            {/* モバイル：サイドバートグルボタン */}
+            <Button
+              size="icon"
+              ghost
+              className="lg:hidden shrink-0 h-10 w-10 rounded-xl border border-border/50"
+              onClick={() => setMobileSidebarOpen(true)}
+              title="モデル情報"
+            >
+              <Wrench size={14} />
+            </Button>
+
             <textarea
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={connected ? "メッセージを入力… (Cmd+Enter で送信)" : "接続中…"}
+              placeholder={
+                connected
+                  ? isMobile
+                    ? "メッセージを入力… (Enterで送信)"
+                    : "メッセージを入力… (Cmd+Enter で送信)"
+                  : "接続中…"
+              }
               disabled={!connected || !sessionId}
               rows={1}
               className={cn(
@@ -290,12 +332,12 @@ export default function ChatPage() {
                 <Square size={14} />
               </Button>
             ) : (
-              <Button size="icon" className="rounded-xl shrink-0 h-10 w-10" onClick={sendMessage} disabled={!connected || !sessionId || !input.trim()} title="送信 (Enter)">
+              <Button size="icon" className="rounded-xl shrink-0 h-10 w-10" onClick={sendMessage} disabled={!connected || !sessionId || !input.trim()} title="送信">
                 <SendHorizonal size={14} />
               </Button>
             )}
           </div>
-          <p className="text-center text-xs text-muted-foreground/40 mt-2">
+          <p className="text-center text-xs text-muted-foreground/40 mt-2 hidden sm:block">
             Hermes Agent — ツール・スキル・CRONが使えます
           </p>
         </div>
