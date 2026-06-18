@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { SendHorizonal, Square, Wrench, X } from "lucide-react";
+import { Plus, SendHorizonal, Square, Wrench, X } from "lucide-react";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { cn } from "@/lib/utils";
 import { Markdown } from "@/components/Markdown";
@@ -17,6 +17,7 @@ import { SessionHistoryPanel } from "@/components/SessionHistoryPanel";
 import { usePageHeader } from "@/contexts/usePageHeader";
 import { useProfileScope } from "@/contexts/useProfileScope";
 import { GatewayClient } from "@/lib/gatewayClient";
+import { api } from "@/lib/api";
 import { PluginSlot } from "@/plugins";
 import { useBelowBreakpoint } from "@nous-research/ui/hooks/use-below-breakpoint";
 
@@ -153,12 +154,36 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
       await gw.connect();
     } catch { return; }
 
+    // 直近の対話セッションを継続（URL ?resume= が無ければ最新の非cronセッションを採用）。
+    // tui_auto_resume_recent 相当の挙動をバブルUIで再現する。
+    let resumeId: string | null = resumeSession;
+    if (!resumeId) {
+      try {
+        const list = await api.getSessions(20);
+        const recent = [...(list.sessions ?? [])]
+          .sort((a, b) => b.last_active - a.last_active)
+          .find((s) => !s.id.startsWith("cron_") && s.source !== "cron");
+        resumeId = recent?.id ?? null;
+      } catch { resumeId = null; }
+    }
+
     const result = await gw.request<{ session_id: string }>("session.create", {
       channel: channelId,
       ...(profile ? { profile } : {}),
-      ...(resumeSession ? { resume: resumeSession } : {}),
+      ...(resumeId ? { resume: resumeId } : {}),
     });
     setSessionId(result.session_id);
+
+    // 継続したセッションの全履歴をバブルで表示する（resume_display: full 相当）。
+    if (resumeId) {
+      try {
+        const hist = await api.getSessionMessages(resumeId);
+        const loaded: Message[] = hist.messages
+          .filter((m) => (m.role === "user" || m.role === "assistant") && m.content)
+          .map((m) => ({ id: genId(), role: m.role as Role, text: m.content as string }));
+        if (loaded.length) setMessages(loaded);
+      } catch { /* 履歴取得失敗時は空のまま */ }
+    }
 
     gw.on<{ text?: string }>("message.delta", (ev) => {
       const text = ev.payload?.text ?? "";
@@ -239,6 +264,21 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
     setStreaming(false);
   }, [sessionId]);
 
+  const newChat = useCallback(async () => {
+    if (streaming) return;
+    setMessages([]);
+    setInput("");
+    const gw = gwRef.current;
+    if (!gw) { connect(); return; }
+    try {
+      const result = await gw.request<{ session_id: string }>("session.create", {
+        channel: channelId,
+        ...(profile ? { profile } : {}),
+      });
+      setSessionId(result.session_id);
+    } catch { connect(); }
+  }, [channelId, profile, streaming, connect]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && (isMobile ? !e.shiftKey : (e.ctrlKey || e.metaKey))) {
       e.preventDefault();
@@ -293,6 +333,17 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
 
         <div className="border-t border-border bg-background px-3 sm:px-4 py-3 safe-area-pb">
           <div className="flex items-end gap-2 max-w-4xl mx-auto">
+            {/* 新規チャット */}
+            <Button
+              size="icon"
+              ghost
+              className="shrink-0 h-10 w-10 rounded-xl border border-border/50"
+              onClick={newChat}
+              disabled={!connected || streaming}
+              title="新規チャット（現在の会話をリセット）"
+            >
+              <Plus size={16} />
+            </Button>
             {/* モバイル：サイドバートグルボタン */}
             <Button
               size="icon"
