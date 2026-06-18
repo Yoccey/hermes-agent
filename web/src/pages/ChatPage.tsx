@@ -6,7 +6,7 @@
  * Connects via GatewayClient: session.create → prompt.submit → message.delta events.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Plus, SendHorizonal, Square, Wrench, X } from "lucide-react";
 import { Button } from "@nous-research/ui/ui/components/button";
@@ -75,7 +75,7 @@ function ToolBadge({ tool }: { tool: ToolCall }) {
 
 // ─── Single message bubble ────────────────────────────────────────────────────
 
-function MessageBubble({ msg }: { msg: Message }) {
+const MessageBubble = memo(function MessageBubble({ msg }: { msg: Message }) {
   const isUser = msg.role === "user";
   return (
     <div className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}>
@@ -107,7 +107,7 @@ function MessageBubble({ msg }: { msg: Message }) {
       </div>
     </div>
   );
-}
+});
 
 // ─── Main ChatPage ────────────────────────────────────────────────────────────
 
@@ -128,13 +128,22 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const gwRef = useRef<GatewayClient | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // message.delta を requestAnimationFrame で間引くためのバッファ。
+  const pendingDeltaRef = useRef("");
+  const rafRef = useRef<number | null>(null);
 
   useEffect(() => { setTitle("チャット"); }, [setTitle]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const c = scrollRef.current;
+    if (!c) return;
+    // 最下部付近のときだけ即時スクロール（アニメ無し）。
+    // トークン毎の smooth scroll が毎フレーム reflow を起こしメインスレッドを飽和させるのを防ぐ。
+    if (c.scrollHeight - c.scrollTop - c.clientHeight < 120) {
+      c.scrollTop = c.scrollHeight;
+    }
   }, [messages]);
 
   useEffect(() => {
@@ -143,6 +152,22 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   }, [input]);
+
+  // バッファした delta テキストをまとめて1回の setState で反映する。
+  // 35トークン/秒の setState を毎フレーム1回に間引き、再描画回数を抑える。
+  const flushDelta = useCallback(() => {
+    rafRef.current = null;
+    const chunk = pendingDeltaRef.current;
+    if (!chunk) return;
+    pendingDeltaRef.current = "";
+    setMessages((prev) => {
+      const last = prev[prev.length - 1];
+      if (last?.role === "assistant" && last.streaming) {
+        return [...prev.slice(0, -1), { ...last, text: last.text + chunk }];
+      }
+      return [...prev, { id: genId(), role: "assistant", text: chunk, streaming: true }];
+    });
+  }, []);
 
   const connect = useCallback(async () => {
     gwRef.current?.close();
@@ -186,17 +211,12 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
     }
 
     gw.on<{ text?: string }>("message.delta", (ev) => {
-      const text = ev.payload?.text ?? "";
-      setMessages((prev) => {
-        const last = prev[prev.length - 1];
-        if (last?.role === "assistant" && last.streaming) {
-          return [...prev.slice(0, -1), { ...last, text: last.text + text }];
-        }
-        return [...prev, { id: genId(), role: "assistant", text, streaming: true }];
-      });
+      pendingDeltaRef.current += ev.payload?.text ?? "";
+      if (rafRef.current === null) rafRef.current = requestAnimationFrame(flushDelta);
     });
 
     gw.on("message.complete", () => {
+      flushDelta(); // バッファ残りを確定してから完了処理
       setStreaming(false);
       setMessages((prev) => {
         const last = prev[prev.length - 1];
@@ -206,6 +226,7 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
     });
 
     gw.on<{ text?: string }>("status.update", (ev) => {
+      flushDelta();
       const text = ev.payload?.text ?? "";
       setMessages((prev) => {
         const last = prev[prev.length - 1];
@@ -216,6 +237,7 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
     });
 
     gw.on<{ name?: string }>("tool.start", (ev) => {
+      flushDelta();
       const name = ev.payload?.name ?? "tool";
       setMessages((prev) => {
         const last = prev[prev.length - 1];
@@ -228,6 +250,7 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
     });
 
     gw.on<{ name?: string; summary?: string }>("tool.complete", (ev) => {
+      flushDelta();
       const { name = "", summary = "" } = ev.payload ?? {};
       setMessages((prev) => {
         const last = prev[prev.length - 1];
@@ -240,11 +263,14 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
         return prev;
       });
     });
-  }, [channelId, profile, resumeSession]);
+  }, [channelId, profile, resumeSession, flushDelta]);
 
   useEffect(() => {
     connect();
-    return () => { gwRef.current?.close(); };
+    return () => {
+      gwRef.current?.close();
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    };
   }, [connect]);
 
   const sendMessage = useCallback(async () => {
@@ -317,7 +343,7 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground gap-3 pb-20">
               <div className="text-4xl">⚡</div>
@@ -328,7 +354,6 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
             </div>
           )}
           {messages.map((msg) => <MessageBubble key={msg.id} msg={msg} />)}
-          <div ref={bottomRef} />
         </div>
 
         <div className="border-t border-border bg-background px-3 sm:px-4 py-3 safe-area-pb">
