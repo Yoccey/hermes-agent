@@ -114,8 +114,7 @@ function UnknownRouteFallback({ pluginsLoading }: { pluginsLoading: boolean }) {
 
 const CHAT_NAV_ITEM: NavItem = {
   path: "/chat",
-  labelKey: "chat",
-  label: "Chat",
+  label: "New session",
   icon: Terminal,
 };
 
@@ -165,7 +164,7 @@ const BUILTIN_NAV_REST: NavItem[] = [
     label: "Sessions",
     icon: MessageSquare,
   },
-  { path: "/files", label: "Files", icon: FolderOpen },
+  { path: "/files", label: "Artifacts", icon: FolderOpen },
   {
     path: "/analytics",
     labelKey: "analytics",
@@ -180,10 +179,10 @@ const BUILTIN_NAV_REST: NavItem[] = [
   },
   { path: "/logs", labelKey: "logs", label: "Logs", icon: FileText },
   { path: "/cron", labelKey: "cron", label: "Cron", icon: Clock },
-  { path: "/skills", labelKey: "skills", label: "Skills", icon: Package },
+  { path: "/skills", label: "Skills & Tools", icon: Package },
   { path: "/plugins", labelKey: "plugins", label: "Plugins", icon: Puzzle },
   { path: "/mcp", label: "MCP", icon: Plug },
-  { path: "/channels", label: "Channels", icon: Radio },
+  { path: "/channels", label: "Messaging", icon: Radio },
   { path: "/webhooks", label: "Webhooks", icon: Webhook },
   { path: "/pairing", label: "Pairing", icon: ShieldCheck },
   { path: "/profiles", labelKey: "profiles", label: "Profiles", icon: Users },
@@ -264,19 +263,34 @@ function buildNavItems(
 }
 
 /** Split merged nav into built-in sidebar entries vs plugin tabs, preserving plugin order hints. */
+/** desktop の主要4項目（New session / Skills & Tools / Messaging / Artifacts）を
+ *  サイドバー上段に出し、残りの管理系は「設定」グループへ送るための順序定義。 */
+const PRIMARY_NAV_PATHS = ["/chat", "/skills", "/channels", "/files"];
+
 function partitionSidebarNav(
   builtIn: NavItem[],
   manifests: PluginManifest[],
-): { coreItems: NavItem[]; pluginItems: NavItem[] } {
+): { primaryItems: NavItem[]; settingsItems: NavItem[]; pluginItems: NavItem[] } {
   const merged = buildNavItems(builtIn, manifests);
   const builtinPaths = new Set(builtIn.map((i) => i.path));
-  const coreItems: NavItem[] = [];
+  const primarySet = new Set(PRIMARY_NAV_PATHS);
+  const primaryItems: NavItem[] = [];
+  const settingsItems: NavItem[] = [];
   const pluginItems: NavItem[] = [];
   for (const item of merged) {
-    if (builtinPaths.has(item.path)) coreItems.push(item);
-    else pluginItems.push(item);
+    if (!builtinPaths.has(item.path)) {
+      pluginItems.push(item);
+    } else if (primarySet.has(item.path)) {
+      primaryItems.push(item);
+    } else {
+      settingsItems.push(item);
+    }
   }
-  return { coreItems, pluginItems };
+  // primary を desktop の並び順に固定。
+  primaryItems.sort(
+    (a, b) => PRIMARY_NAV_PATHS.indexOf(a.path) - PRIMARY_NAV_PATHS.indexOf(b.path),
+  );
+  return { primaryItems, settingsItems, pluginItems };
 }
 
 function buildRoutes(
@@ -615,7 +629,7 @@ export default function App() {
               aria-label={t.app.navigation}
             >
               <ul className="flex flex-col">
-                {sidebarNav.coreItems.map((item) => (
+                {sidebarNav.primaryItems.map((item) => (
                   <SidebarNavLink
                     closeMobile={closeMobile}
                     collapsed={isDesktopCollapsed}
@@ -626,6 +640,37 @@ export default function App() {
                   />
                 ))}
               </ul>
+
+              {sidebarNav.settingsItems.length > 0 && (
+                <div
+                  aria-labelledby="hermes-sidebar-settings-heading"
+                  className="flex flex-col border-t border-current/10 pb-2"
+                  role="group"
+                >
+                  <span
+                    className={cn(
+                      "px-5 pt-2.5 pb-1",
+                      "font-mondwest text-display text-xs tracking-[0.12em] text-text-tertiary",
+                      isDesktopCollapsed && "lg:hidden",
+                    )}
+                    id="hermes-sidebar-settings-heading"
+                  >
+                    設定
+                  </span>
+                  <ul className="flex flex-col">
+                    {sidebarNav.settingsItems.map((item) => (
+                      <SidebarNavLink
+                        closeMobile={closeMobile}
+                        collapsed={isDesktopCollapsed}
+                        item={item}
+                        key={item.path}
+                        t={t}
+                        tooltipWarmRef={tooltipWarmRef}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {sidebarNav.pluginItems.length > 0 && (
                 <div
