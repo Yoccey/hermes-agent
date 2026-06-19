@@ -344,38 +344,44 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4">
           {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground gap-2 pb-20">
-              <p className="text-base font-medium text-foreground/80">Hermes Agent</p>
-              <p className="text-xs max-w-xs opacity-60">
-                スキル・ツール・CRONを備えたエージェントにメッセージを送信してください
+            <div className="flex flex-col items-center justify-center h-full text-center gap-4 pb-24 select-none">
+              <h1
+                className="text-4xl sm:text-6xl font-semibold uppercase tracking-[0.1em] text-foreground/90"
+                style={{ fontFamily: "var(--theme-font-display)" }}
+              >
+                Hermes Agent
+              </h1>
+              <p className="text-sm text-muted-foreground/70 max-w-md leading-relaxed">
+                スキル・ツール・CRON・MCPを備えた軍師にメッセージを送ってください
               </p>
             </div>
           )}
           {messages.map((msg) => <MessageBubble key={msg.id} msg={msg} />)}
         </div>
 
-        <div className="border-t border-border/60 bg-background px-3 sm:px-4 py-3 safe-area-pb">
-          <div className="flex items-end gap-2 max-w-4xl mx-auto">
+        <div className="bg-background px-3 sm:px-4 py-3 safe-area-pb">
+          {/* desktop の "Send follow-up" 風：丸いピル1本に + / 入力 / 送信 を収める */}
+          <div className="flex items-end gap-1.5 max-w-3xl mx-auto rounded-[1.75rem] border border-border/40 bg-secondary/40 px-2 py-1.5 transition-colors focus-within:border-primary/30 focus-within:bg-secondary/55">
             {/* 新規チャット */}
             <Button
               size="icon"
               ghost
-              className="shrink-0 h-10 w-10 rounded-xl"
+              className="shrink-0 h-9 w-9 rounded-full"
               onClick={newChat}
               disabled={!connected || streaming}
               title="新規チャット（現在の会話をリセット）"
             >
-              <Plus size={16} />
+              <Plus size={18} />
             </Button>
             {/* モバイル：サイドバートグルボタン */}
             <Button
               size="icon"
               ghost
-              className="lg:hidden shrink-0 h-10 w-10 rounded-xl"
+              className="lg:hidden shrink-0 h-9 w-9 rounded-full"
               onClick={() => setMobileSidebarOpen(true)}
               title="モデル情報"
             >
-              <Wrench size={14} />
+              <Wrench size={15} />
             </Button>
 
             <textarea
@@ -391,27 +397,24 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
               disabled={!connected || !sessionId}
               rows={1}
               className={cn(
-                "flex-1 resize-none rounded-2xl border border-transparent bg-secondary/40",
-                "px-4 py-3 text-sm leading-relaxed",
+                "flex-1 resize-none self-center bg-transparent border-0",
+                "px-2 py-2 text-sm leading-relaxed",
                 "placeholder:text-muted-foreground/50",
-                "focus:outline-none focus:bg-secondary/60 focus:ring-1 focus:ring-primary/30",
-                "disabled:opacity-40 disabled:cursor-not-allowed transition-colors",
+                "focus:outline-none focus:ring-0",
+                "disabled:opacity-40 disabled:cursor-not-allowed",
               )}
               style={{ maxHeight: "200px", overflowY: "auto" }}
             />
             {streaming ? (
-              <Button size="icon" destructive className="rounded-xl shrink-0 h-10 w-10" onClick={stopGeneration} title="停止">
-                <Square size={14} />
+              <Button size="icon" destructive className="rounded-full shrink-0 h-9 w-9" onClick={stopGeneration} title="停止">
+                <Square size={15} />
               </Button>
             ) : (
-              <Button size="icon" className="rounded-xl shrink-0 h-10 w-10" onClick={sendMessage} disabled={!connected || !sessionId || !input.trim()} title="送信">
-                <SendHorizonal size={14} />
+              <Button size="icon" className="rounded-full shrink-0 h-9 w-9" onClick={sendMessage} disabled={!connected || !sessionId || !input.trim()} title="送信 (Cmd+Enter)">
+                <SendHorizonal size={15} />
               </Button>
             )}
           </div>
-          <p className="text-center text-xs text-muted-foreground/40 mt-2 hidden sm:block">
-            Hermes Agent — ツール・スキル・CRONが使えます
-          </p>
         </div>
       </div>
 
