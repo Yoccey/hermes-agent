@@ -19,7 +19,6 @@ import { useProfileScope } from "@/contexts/useProfileScope";
 import { GatewayClient } from "@/lib/gatewayClient";
 import { api } from "@/lib/api";
 import { PluginSlot } from "@/plugins";
-import { useBelowBreakpoint } from "@nous-research/ui/hooks/use-below-breakpoint";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -54,18 +53,18 @@ function ToolBadge({ tool }: { tool: ToolCall }) {
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded border font-mono",
+        "inline-flex items-center gap-1.5 text-xs font-mono",
         tool.status === "running"
-          ? "border-primary/40 text-primary/70 bg-primary/5"
+          ? "text-primary/80"
           : tool.status === "error"
-            ? "border-destructive/40 text-destructive/70 bg-destructive/5"
-            : "border-border text-muted-foreground bg-secondary/30",
+            ? "text-destructive/80"
+            : "text-muted-foreground/80",
       )}
     >
       <Wrench size={11} className={tool.status === "running" ? "animate-spin" : ""} />
       <span>{tool.name}</span>
       {tool.summary && (
-        <span className="text-muted-foreground/60 truncate max-w-[180px]">
+        <span className="text-muted-foreground/50 truncate max-w-[220px]">
           — {tool.summary}
         </span>
       )}
@@ -77,34 +76,35 @@ function ToolBadge({ tool }: { tool: ToolCall }) {
 
 const MessageBubble = memo(function MessageBubble({ msg }: { msg: Message }) {
   const isUser = msg.role === "user";
-  return (
-    <div className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}>
-      <div
-        className={cn(
-          "max-w-[88%] sm:max-w-[75%] rounded-2xl px-4 py-3 text-sm",
-          isUser
-            ? "bg-primary text-primary-foreground rounded-br-sm"
-            : "bg-secondary/50 text-foreground border border-border/50 rounded-bl-sm",
-        )}
-      >
-        {msg.statusText && (
-          <p className="text-xs text-muted-foreground italic mb-1.5">{msg.statusText}</p>
-        )}
-        {msg.toolCalls && msg.toolCalls.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-2">
-            {msg.toolCalls.map((t, i) => <ToolBadge key={i} tool={t} />)}
-          </div>
-        )}
-        {msg.text ? (
-          isUser ? (
-            <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
-          ) : (
-            <Markdown content={msg.text} streaming={msg.streaming} />
-          )
-        ) : msg.streaming ? (
-          <span className="inline-block w-2 h-4 bg-foreground/40 animate-pulse rounded-sm" />
-        ) : null}
+
+  // ユーザー発言のみ控えめな soft fill のバブル（右寄せ）。
+  if (isUser) {
+    return (
+      <div className="flex w-full justify-end">
+        <div className="max-w-[85%] sm:max-w-[70%] rounded-2xl bg-secondary/60 px-4 py-2.5 text-sm text-foreground">
+          <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+        </div>
       </div>
+    );
+  }
+
+  // アシスタント発言は脱・箱化：背景も枠も持たず、本文がページに直接流れる（desktop風 flat）。
+  // 余白（親の space-y）でターンを区切る。
+  return (
+    <div className="w-full text-sm text-foreground">
+      {msg.statusText && (
+        <p className="text-xs text-muted-foreground italic mb-1.5">{msg.statusText}</p>
+      )}
+      {msg.toolCalls && msg.toolCalls.length > 0 && (
+        <div className="flex flex-col gap-1 mb-2">
+          {msg.toolCalls.map((t, i) => <ToolBadge key={i} tool={t} />)}
+        </div>
+      )}
+      {msg.text ? (
+        <Markdown content={msg.text} streaming={msg.streaming} />
+      ) : msg.streaming ? (
+        <span className="inline-block w-2 h-4 bg-foreground/40 animate-pulse rounded-sm" />
+      ) : null}
     </div>
   );
 });
@@ -117,7 +117,6 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
   const [searchParams] = useSearchParams();
   const resumeSession = searchParams.get("resume");
 
-  const isMobile = useBelowBreakpoint(1024);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -306,7 +305,7 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
   }, [channelId, profile, streaming, connect]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && (isMobile ? !e.shiftKey : (e.ctrlKey || e.metaKey))) {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       sendMessage();
     }
@@ -345,9 +344,8 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4">
           {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground gap-3 pb-20">
-              <div className="text-4xl">⚡</div>
-              <p className="text-sm font-medium">Hermes Agent</p>
+            <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground gap-2 pb-20">
+              <p className="text-base font-medium text-foreground/80">Hermes Agent</p>
               <p className="text-xs max-w-xs opacity-60">
                 スキル・ツール・CRONを備えたエージェントにメッセージを送信してください
               </p>
@@ -356,13 +354,13 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
           {messages.map((msg) => <MessageBubble key={msg.id} msg={msg} />)}
         </div>
 
-        <div className="border-t border-border bg-background px-3 sm:px-4 py-3 safe-area-pb">
+        <div className="border-t border-border/60 bg-background px-3 sm:px-4 py-3 safe-area-pb">
           <div className="flex items-end gap-2 max-w-4xl mx-auto">
             {/* 新規チャット */}
             <Button
               size="icon"
               ghost
-              className="shrink-0 h-10 w-10 rounded-xl border border-border/50"
+              className="shrink-0 h-10 w-10 rounded-xl"
               onClick={newChat}
               disabled={!connected || streaming}
               title="新規チャット（現在の会話をリセット）"
@@ -373,7 +371,7 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
             <Button
               size="icon"
               ghost
-              className="lg:hidden shrink-0 h-10 w-10 rounded-xl border border-border/50"
+              className="lg:hidden shrink-0 h-10 w-10 rounded-xl"
               onClick={() => setMobileSidebarOpen(true)}
               title="モデル情報"
             >
@@ -387,18 +385,16 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
               onKeyDown={handleKeyDown}
               placeholder={
                 connected
-                  ? isMobile
-                    ? "メッセージを入力… (Enterで送信)"
-                    : "メッセージを入力… (Cmd+Enter で送信)"
+                  ? "メッセージを入力… (Cmd+Enter で送信)"
                   : "接続中…"
               }
               disabled={!connected || !sessionId}
               rows={1}
               className={cn(
-                "flex-1 resize-none rounded-xl border border-border bg-secondary/30",
+                "flex-1 resize-none rounded-2xl border border-transparent bg-secondary/40",
                 "px-4 py-3 text-sm leading-relaxed",
                 "placeholder:text-muted-foreground/50",
-                "focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/40",
+                "focus:outline-none focus:bg-secondary/60 focus:ring-1 focus:ring-primary/30",
                 "disabled:opacity-40 disabled:cursor-not-allowed transition-colors",
               )}
               style={{ maxHeight: "200px", overflowY: "auto" }}
