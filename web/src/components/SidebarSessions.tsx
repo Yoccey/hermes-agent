@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Search } from "lucide-react";
+import { Clock, Search } from "lucide-react";
 import { api } from "@/lib/api";
 import { useProfileScope } from "@/contexts/useProfileScope";
 import { cn } from "@/lib/utils";
@@ -36,8 +36,8 @@ export function SidebarSessions({ collapsed, closeMobile }: SidebarSessionsProps
     api
       .getSessions(40)
       .then((r) => {
+        // cron実行も含める（本家同様に内容を見られるように）。
         const list = ((r as { sessions?: SessionEntry[] }).sessions ?? [])
-          .filter((s) => !s.id.startsWith("cron_") && s.source !== "cron")
           .sort((a, b) => (b.last_active ?? 0) - (a.last_active ?? 0));
         setSessions(list);
       })
@@ -79,15 +79,20 @@ export function SidebarSessions({ collapsed, closeMobile }: SidebarSessionsProps
         セッション
       </span>
 
-      <ul className="flex flex-col">
+      <ul className="flex max-h-[45vh] flex-col overflow-y-auto overflow-x-hidden">
         {filtered.length === 0 ? (
           <li className="px-5 py-2 text-xs text-text-tertiary">
             {sessions.length === 0 ? "セッションなし" : "一致なし"}
           </li>
         ) : (
           filtered.map((s) => {
+            const isCron = s.id.startsWith("cron_") || s.source === "cron";
             const label =
-              s.title && s.title !== "Untitled" ? s.title : "(無題)";
+              s.title && s.title !== "Untitled"
+                ? s.title
+                : isCron
+                  ? "CRON実行"
+                  : "(無題)";
             const isActive = activeResume === s.id;
             return (
               <li key={s.id}>
@@ -98,13 +103,16 @@ export function SidebarSessions({ collapsed, closeMobile }: SidebarSessionsProps
                     closeMobile();
                   }}
                   className={cn(
-                    "flex w-full items-center px-5 py-1.5 text-left text-sm transition-colors cursor-pointer",
+                    "flex w-full items-center gap-2 px-5 py-1.5 text-left text-sm transition-colors cursor-pointer",
                     isActive
                       ? "text-midground"
                       : "text-text-secondary hover:text-midground",
                   )}
                   title={label}
                 >
+                  {isCron && (
+                    <Clock className="h-3 w-3 shrink-0 text-text-tertiary" />
+                  )}
                   <span className="truncate">{label}</span>
                 </button>
               </li>
