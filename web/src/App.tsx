@@ -51,6 +51,8 @@ import {
   Wrench,
   X,
   Zap,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { SelectionSwitcher } from "@nous-research/ui/ui/components/selection-switcher";
@@ -114,7 +116,7 @@ function UnknownRouteFallback({ pluginsLoading }: { pluginsLoading: boolean }) {
 
 const CHAT_NAV_ITEM: NavItem = {
   path: "/chat",
-  label: "New session",
+  label: "チャット",
   icon: Terminal,
 };
 
@@ -164,7 +166,7 @@ const BUILTIN_NAV_REST: NavItem[] = [
     label: "Sessions",
     icon: MessageSquare,
   },
-  { path: "/files", label: "Artifacts", icon: FolderOpen },
+  { path: "/files", label: "アーティファクト", icon: FolderOpen },
   {
     path: "/analytics",
     labelKey: "analytics",
@@ -179,10 +181,10 @@ const BUILTIN_NAV_REST: NavItem[] = [
   },
   { path: "/logs", labelKey: "logs", label: "Logs", icon: FileText },
   { path: "/cron", labelKey: "cron", label: "Cron", icon: Clock },
-  { path: "/skills", label: "Skills & Tools", icon: Package },
+  { path: "/skills", label: "スキル・ツール", icon: Package },
   { path: "/plugins", labelKey: "plugins", label: "Plugins", icon: Puzzle },
   { path: "/mcp", label: "MCP", icon: Plug },
-  { path: "/channels", label: "Messaging", icon: Radio },
+  { path: "/channels", label: "メッセージング", icon: Radio },
   { path: "/webhooks", label: "Webhooks", icon: Webhook },
   { path: "/pairing", label: "Pairing", icon: ShieldCheck },
   { path: "/profiles", labelKey: "profiles", label: "Profiles", icon: Users },
@@ -365,6 +367,24 @@ export default function App() {
   const { theme } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
   const closeMobile = useCallback(() => setMobileOpen(false), []);
+
+  // 「設定」グループの開閉。desktop風に畳んでおける（既定は開）。localStorage永続。
+  const [settingsOpen, setSettingsOpen] = useState(() => {
+    try {
+      return localStorage.getItem("hermes-sidebar-settings-open") !== "false";
+    } catch {
+      return true;
+    }
+  });
+  const toggleSettings = useCallback(() => {
+    setSettingsOpen((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("hermes-sidebar-settings-open", String(next));
+      } catch { /* localStorage may be unavailable in private browsing */ }
+      return next;
+    });
+  }, []);
 
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -647,28 +667,52 @@ export default function App() {
                   className="flex flex-col border-t border-current/10 pb-2"
                   role="group"
                 >
-                  <span
-                    className={cn(
-                      "px-5 pt-2.5 pb-1",
-                      "font-mondwest text-display text-xs tracking-[0.12em] text-text-tertiary",
-                      isDesktopCollapsed && "lg:hidden",
-                    )}
-                    id="hermes-sidebar-settings-heading"
-                  >
-                    設定
-                  </span>
-                  <ul className="flex flex-col">
-                    {sidebarNav.settingsItems.map((item) => (
-                      <SidebarNavLink
-                        closeMobile={closeMobile}
-                        collapsed={isDesktopCollapsed}
-                        item={item}
-                        key={item.path}
-                        t={t}
-                        tooltipWarmRef={tooltipWarmRef}
-                      />
-                    ))}
-                  </ul>
+                  {isDesktopCollapsed ? (
+                    // アイコンのみ表示時はトグルせず常時アイコン表示
+                    <ul className="flex flex-col">
+                      {sidebarNav.settingsItems.map((item) => (
+                        <SidebarNavLink
+                          closeMobile={closeMobile}
+                          collapsed={isDesktopCollapsed}
+                          item={item}
+                          key={item.path}
+                          t={t}
+                          tooltipWarmRef={tooltipWarmRef}
+                        />
+                      ))}
+                    </ul>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={toggleSettings}
+                        aria-expanded={settingsOpen}
+                        className="flex items-center gap-1.5 px-5 pt-2.5 pb-1 font-mondwest text-display text-xs tracking-[0.12em] text-text-tertiary transition-colors hover:text-midground cursor-pointer"
+                        id="hermes-sidebar-settings-heading"
+                      >
+                        {settingsOpen ? (
+                          <ChevronDown className="h-3 w-3 shrink-0" />
+                        ) : (
+                          <ChevronRight className="h-3 w-3 shrink-0" />
+                        )}
+                        設定
+                      </button>
+                      {settingsOpen && (
+                        <ul className="flex flex-col">
+                          {sidebarNav.settingsItems.map((item) => (
+                            <SidebarNavLink
+                              closeMobile={closeMobile}
+                              collapsed={isDesktopCollapsed}
+                              item={item}
+                              key={item.path}
+                              t={t}
+                              tooltipWarmRef={tooltipWarmRef}
+                            />
+                          ))}
+                        </ul>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
 
