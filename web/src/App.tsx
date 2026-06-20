@@ -61,6 +61,7 @@ import { Typography } from "@nous-research/ui/ui/components/typography/index";
 import { cn } from "@/lib/utils";
 import { Backdrop } from "@/components/Backdrop";
 import { SidebarFooter } from "@/components/SidebarFooter";
+import { SidebarSessions } from "@/components/SidebarSessions";
 import { SidebarStatusStrip, gatewayLine } from "@/components/SidebarStatusStrip";
 import { useBelowBreakpoint } from "@nous-research/ui/hooks/use-below-breakpoint";
 import { useSidebarStatus } from "@/hooks/useSidebarStatus";
@@ -162,8 +163,7 @@ function ChatRouteSink() {
 const BUILTIN_NAV_REST: NavItem[] = [
   {
     path: "/sessions",
-    labelKey: "sessions",
-    label: "Sessions",
+    label: "セッション管理",
     icon: MessageSquare,
   },
   { path: "/files", label: "アーティファクト", icon: FolderOpen },
@@ -371,9 +371,9 @@ export default function App() {
   // 「設定」グループの開閉。desktop風に畳んでおける（既定は開）。localStorage永続。
   const [settingsOpen, setSettingsOpen] = useState(() => {
     try {
-      return localStorage.getItem("hermes-sidebar-settings-open") !== "false";
+      return localStorage.getItem("hermes-sidebar-settings-open") === "true";
     } catch {
-      return true;
+      return false;
     }
   });
   const toggleSettings = useCallback(() => {
@@ -660,6 +660,11 @@ export default function App() {
                   />
                 ))}
               </ul>
+
+              <SidebarSessions
+                collapsed={isDesktopCollapsed}
+                closeMobile={closeMobile}
+              />
 
               {sidebarNav.settingsItems.length > 0 && (
                 <div
