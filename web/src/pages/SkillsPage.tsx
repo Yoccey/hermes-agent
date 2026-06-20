@@ -493,7 +493,7 @@ export default function SkillsPage() {
                         .replace("{s}", activeSkills.length !== 1 ? "s" : "")}
                     </Badge>
                     <Button
-                      size="xs"
+                      size="sm"
                       outlined
                       className="uppercase"
                       onClick={openCreateEditor}
@@ -594,7 +594,7 @@ export default function SkillsPage() {
                               )}
                               <div className="mt-3">
                                 <Button
-                                  size="xs"
+                                  size="sm"
                                   outlined
                                   onClick={() => setConfigToolset(ts)}
                                 >

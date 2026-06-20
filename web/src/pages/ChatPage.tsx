@@ -8,7 +8,7 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plus, SendHorizonal, Square, Wrench, X } from "lucide-react";
+import { Plus, SendHorizonal, Square, Wrench } from "lucide-react";
 import { Button } from "@nous-research/ui/ui/components/button";
 import { cn } from "@/lib/utils";
 import { Markdown } from "@/components/Markdown";
@@ -124,7 +124,6 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
   const [streaming, setStreaming] = useState(false);
   const [channelId] = useState(genId);
   const [historyOpen] = useState(false);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const gwRef = useRef<GatewayClient | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -313,28 +312,12 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
 
   return (
     <div className="flex h-full overflow-hidden">
-
-      {/* サイドバー：デスクトップは常時表示、モバイルはオーバーレイ */}
-      <div className={cn(
-        "hidden lg:flex lg:h-full lg:w-80 lg:shrink-0",
-      )}>
-        <ChatSidebar channel={channelId} />
-      </div>
-
-      {/* モバイルサイドバー：オーバーレイ */}
-      {mobileSidebarOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 flex flex-col bg-background/95 backdrop-blur-sm p-4 gap-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-muted-foreground">モデル・ツール</span>
-            <Button size="icon" ghost className="h-8 w-8" onClick={() => setMobileSidebarOpen(false)}>
-              <X size={16} />
-            </Button>
-          </div>
-          <ChatSidebar channel={channelId} />
-        </div>
-      )}
-
       <div className="flex flex-col flex-1 min-w-0 h-full">
+        {/* 上部バー：モデル＋接続状態（旧 w-80 サイドバーをここに集約） */}
+        <div className="shrink-0 border-b border-border/40">
+          <ChatSidebar channel={channelId} compact />
+        </div>
+
         {!connected && (
           <div className="flex items-center justify-between px-4 py-2 bg-destructive/10 border-b border-destructive/20 text-xs text-destructive">
             <span>接続が切れています</span>
@@ -372,16 +355,6 @@ export default function ChatPage(_props: { isActive?: boolean } = {}) {
               title="新規チャット（現在の会話をリセット）"
             >
               <Plus size={18} />
-            </Button>
-            {/* モバイル：サイドバートグルボタン */}
-            <Button
-              size="icon"
-              ghost
-              className="lg:hidden shrink-0 h-9 w-9 rounded-full"
-              onClick={() => setMobileSidebarOpen(true)}
-              title="モデル情報"
-            >
-              <Wrench size={15} />
             </Button>
 
             <textarea

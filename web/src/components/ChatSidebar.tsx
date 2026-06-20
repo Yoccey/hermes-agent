@@ -72,9 +72,12 @@ const STATE_TONE: Record<
 interface ChatSidebarProps {
   channel: string;
   className?: string;
+  /** コンパクト表示：縦カラムでなくチャット上部の薄い横バー（モデル＋接続状態のみ）。
+   *  ツール呼び出しはチャットのバブル内にインライン表示されるため、ここでは省く。 */
+  compact?: boolean;
 }
 
-export function ChatSidebar({ channel, className }: ChatSidebarProps) {
+export function ChatSidebar({ channel, className, compact }: ChatSidebarProps) {
   // `version` bumps on reconnect; gw is derived so we never call setState
   // for it inside an effect (React 19's set-state-in-effect rule). The
   // counter is the dependency on purpose — it's not read in the memo body,
@@ -295,6 +298,56 @@ export function ChatSidebar({ channel, className }: ChatSidebarProps) {
   const canPickModel = state === "open" && !!sessionId;
   const modelLabel = (info.model ?? "—").split("/").slice(-1)[0] ?? "—";
   const banner = error ?? info.credential_warning ?? null;
+
+  // コンパクト：チャット上部に置く薄い横バー（モデルピッカー＋接続状態）。
+  if (compact) {
+    return (
+      <div
+        className={cn(
+          "flex w-full items-center gap-2 px-3 py-1.5",
+          className,
+        )}
+      >
+        <span className="text-display text-[0.65rem] uppercase tracking-wider text-text-tertiary shrink-0">
+          model
+        </span>
+        <Button
+          ghost
+          size="sm"
+          disabled={!canPickModel}
+          onClick={() => setModelOpen(true)}
+          suffix={
+            canPickModel ? (
+              <ChevronDown className="text-text-secondary" />
+            ) : undefined
+          }
+          className="min-w-0 px-0 py-0 normal-case tracking-normal text-sm font-medium hover:underline disabled:no-underline"
+          title={info.model ?? "switch model"}
+        >
+          <span className="truncate">{modelLabel}</span>
+        </Button>
+        {banner && (
+          <span
+            className="ml-2 hidden max-w-[40%] truncate text-xs text-destructive sm:inline"
+            title={banner}
+          >
+            {banner}
+          </span>
+        )}
+        <Badge tone={STATE_TONE[state]} className="ml-auto shrink-0">
+          {STATE_LABEL[state]}
+        </Badge>
+
+        {modelOpen && canPickModel && sessionId && (
+          <ModelPickerDialog
+            gw={gw}
+            sessionId={sessionId}
+            onClose={() => setModelOpen(false)}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <aside
